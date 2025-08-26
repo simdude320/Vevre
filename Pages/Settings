@@ -1,0 +1,353 @@
+import React, { useState, useEffect } from "react";
+import { User } from "@/entities/User";
+import { UploadFile } from "@/integrations/Core";
+import { motion } from "framer-motion";
+import { 
+  ArrowLeft, 
+  Camera, 
+  User as UserIcon, 
+  Mail, 
+  MapPin, 
+  Link as LinkIcon,
+  Lock,
+  Bell,
+  Moon,
+  Sun,
+  Monitor,
+  LogOut
+} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+
+export default function Settings() {
+  const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState(null);
+  const [formData, setFormData] = useState({
+    username: "",
+    full_name: "",
+    bio: "",
+    location: "",
+    website: "",
+    is_private: false,
+    theme_preference: "system"
+  });
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    loadUser();
+  }, []);
+
+  const loadUser = async () => {
+    try {
+      const user = await User.me();
+      setCurrentUser(user);
+      setFormData({
+        username: user.username || "",
+        full_name: user.full_name || "",
+        bio: user.bio || "",
+        location: user.location || "",
+        website: user.website || "",
+        is_private: user.is_private || false,
+        theme_preference: user.theme_preference || "system"
+      });
+    } catch (error) {
+      console.error("Error loading user:", error);
+      navigate(createPageUrl("Feed"));
+    }
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleProfilePictureUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const { file_url } = await UploadFile({ file });
+      await User.updateMyUserData({ profile_picture_url: file_url });
+      setCurrentUser(prev => ({ ...prev, profile_picture_url: file_url }));
+    } catch (error) {
+      console.error("Error uploading profile picture:", error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const saveProfile = async () => {
+    setIsSaving(true);
+    try {
+      await User.updateMyUserData(formData);
+      setCurrentUser(prev => ({ ...prev, ...formData }));
+      
+      // Apply theme change
+      if (formData.theme_preference !== currentUser.theme_preference) {
+        applyTheme(formData.theme_preference);
+      }
+    } catch (error) {
+      console.error("Error saving profile:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const applyTheme = (theme) => {
+    localStorage.setItem('theme', theme);
+    if (theme === 'system') {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.classList.toggle('dark', isDark);
+    } else {
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+    }
+  };
+
+  const handleLogout = async () => {
+    await User.logout();
+    navigate(createPageUrl("Feed"));
+  };
+
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Please Log In</h2>
+          <Button onClick={() => User.login()}>Sign In</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-gray-950">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-4 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate(createPageUrl("Profile"))}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-xl font-semibold">Settings</h1>
+          </div>
+          <Button
+            onClick={saveProfile}
+            disabled={isSaving}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {isSaving ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="p-6 space-y-6">
+        {/* Profile Picture */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center"
+        >
+          <div className="relative inline-block">
+            <Avatar className="h-24 w-24 ring-4 ring-gray-100 dark:ring-gray-800">
+              <AvatarImage src={currentUser.profile_picture_url} />
+              <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-2xl">
+                {currentUser.username?.[0]?.toUpperCase() || currentUser.full_name?.[0]?.toUpperCase() || 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleProfilePictureUpload}
+              className="hidden"
+              id="profile-picture-upload"
+              disabled={isUploading}
+            />
+            <label htmlFor="profile-picture-upload">
+              <Button
+                asChild
+                size="icon"
+                className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full bg-blue-600 hover:bg-blue-700"
+                disabled={isUploading}
+              >
+                <span>
+                  <Camera className="h-4 w-4" />
+                </span>
+              </Button>
+            </label>
+          </div>
+          <p className="text-sm text-gray-500 mt-2">
+            {isUploading ? "Uploading..." : "Tap to change profile picture"}
+          </p>
+        </motion.div>
+
+        {/* Profile Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <UserIcon className="mr-2 h-5 w-5" />
+              Profile Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                value={formData.username}
+                onChange={(e) => handleInputChange('username', e.target.value)}
+                placeholder="Your username"
+              />
+            </div>
+            <div>
+              <Label htmlFor="full_name">Full Name</Label>
+              <Input
+                id="full_name"
+                value={formData.full_name}
+                onChange={(e) => handleInputChange('full_name', e.target.value)}
+                placeholder="Your full name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="bio">Bio</Label>
+              <Textarea
+                id="bio"
+                value={formData.bio}
+                onChange={(e) => handleInputChange('bio', e.target.value)}
+                placeholder="Tell us about yourself..."
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label htmlFor="location">Location</Label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  id="location"
+                  value={formData.location}
+                  onChange={(e) => handleInputChange('location', e.target.value)}
+                  placeholder="Your location"
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="website">Website</Label>
+              <div className="relative">
+                <LinkIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  id="website"
+                  value={formData.website}
+                  onChange={(e) => handleInputChange('website', e.target.value)}
+                  placeholder="https://yourwebsite.com"
+                  className="pl-10"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Privacy Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Lock className="mr-2 h-5 w-5" />
+              Privacy
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Private Account</p>
+                <p className="text-sm text-gray-500">Only approved followers can see your posts</p>
+              </div>
+              <Switch
+                checked={formData.is_private}
+                onCheckedChange={(checked) => handleInputChange('is_private', checked)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Appearance Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Monitor className="mr-2 h-5 w-5" />
+              Appearance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div>
+              <Label htmlFor="theme">Theme</Label>
+              <Select
+                value={formData.theme_preference}
+                onValueChange={(value) => handleInputChange('theme_preference', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select theme" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">
+                    <div className="flex items-center">
+                      <Sun className="mr-2 h-4 w-4" />
+                      Light
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="dark">
+                    <div className="flex items-center">
+                      <Moon className="mr-2 h-4 w-4" />
+                      Dark
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="system">
+                    <div className="flex items-center">
+                      <Monitor className="mr-2 h-4 w-4" />
+                      System
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Account Actions */}
+        <Card>
+          <CardContent className="pt-6">
+            <Button
+              variant="outline"
+              className="w-full text-red-600 border-red-200 hover:bg-red-50"
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign Out
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

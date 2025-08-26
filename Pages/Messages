@@ -1,0 +1,330 @@
+import React, { useState, useEffect } from "react";
+import { User } from "@/entities/User";
+import { Conversation } from "@/entities/Conversation";
+import { Message } from "@/entities/Message";
+import { motion } from "framer-motion";
+import { 
+  Search, 
+  MessageCircle, 
+  Send, 
+  ArrowLeft,
+  Users,
+  Plus
+} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+
+export default function Messages() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [conversations, setConversations] = useState([]);
+  const [users, setUsers] = useState({});
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [messageText, setMessageText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    initializeMessages();
+  }, []);
+
+  const initializeMessages = async () => {
+    try {
+      const user = await User.me();
+      setCurrentUser(user);
+      
+      const [allConversations, allUsers, allMessages] = await Promise.all([
+        Conversation.list('-updated_date'),
+        User.list(),
+        Message.list('-created_date')
+      ]);
+      
+      // Create user lookup
+      const userLookup = {};
+      allUsers.forEach(u => {
+        userLookup[u.id] = u;
+      });
+      
+      // Filter conversations where current user is participant
+      const userConversations = allConversations.filter(conv =>
+        conv.participants.includes(user.id)
+      );
+      
+      setConversations(userConversations);
+      setUsers(userLookup);
+    } catch (error) {
+      console.error("Error loading messages:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const selectConversation = async (conversation) => {
+    setSelectedConversation(conversation);
+    
+    // Load messages for this conversation
+    const conversationMessages = await Message.filter(
+      { conversation_id: conversation.id },
+      'created_date'
+    );
+    setMessages(conversationMessages);
+  };
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!messageText.trim() || !selectedConversation || !currentUser) return;
+
+    try {
+      await Message.create({
+        conversation_id: selectedConversation.id,
+        sender_id: currentUser.id,
+        text: messageText.trim()
+      });
+
+      // Update conversation's last message
+      await Conversation.update(selectedConversation.id, {
+        last_message: messageText.trim(),
+        last_message_at: new Date().toISOString()
+      });
+
+      setMessageText("");
+      // Reload messages
+      const updatedMessages = await Message.filter(
+        { conversation_id: selectedConversation.id },
+        'created_date'
+      );
+      setMessages(updatedMessages);
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
+  };
+
+  const getConversationName = (conversation) => {
+    if (conversation.is_group && conversation.name) {
+      return conversation.name;
+    }
+    
+    // For direct messages, show the other participant's name
+    const otherParticipantId = conversation.participants.find(id => id !== currentUser?.id);
+    const otherUser = users[otherParticipantId];
+    return otherUser?.username || otherUser?.full_name || "Unknown User";
+  };
+
+  const getConversationAvatar = (conversation) => {
+    if (conversation.is_group) {
+      return null; // Group avatar placeholder
+    }
+    
+    const otherParticipantId = conversation.participants.find(id => id !== currentUser?.id);
+    const otherUser = users[otherParticipantId];
+    return otherUser?.profile_picture_url;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-md mx-auto p-4">
+        <div className="animate-pulse space-y-4">
+          {Array(5).fill(0).map((_, i) => (
+            <div key={i} className="flex items-center space-x-3">
+              <div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Please Log In</h2>
+          <Button onClick={() => User.login()}>Sign In</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedConversation) {
+    // Show conversation view
+    return (
+      <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-gray-950 flex flex-col">
+        {/* Conversation Header */}
+        <div className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSelectedConversation(null)}
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={getConversationAvatar(selectedConversation)} />
+                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm">
+                  {selectedConversation.is_group ? (
+                    <Users className="h-4 w-4" />
+                  ) : (
+                    getConversationName(selectedConversation)[0]?.toUpperCase() || 'U'
+                  )}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-semibold text-sm">
+                  {getConversationName(selectedConversation)}
+                </p>
+                {selectedConversation.is_group && (
+                  <p className="text-xs text-gray-500">
+                    {selectedConversation.participants.length} members
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-8">
+              <MessageCircle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+              <p className="text-gray-500">No messages yet. Start the conversation!</p>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${
+                  message.sender_id === currentUser.id ? 'justify-end' : 'justify-start'
+                }`}
+              >
+                <div
+                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
+                    message.sender_id === currentUser.id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                  }`}
+                >
+                  <p className="text-sm">{message.text}</p>
+                  <p className="text-xs mt-1 opacity-70">
+                    {format(new Date(message.created_date), 'HH:mm')}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Message Input */}
+        <div className="border-t border-gray-200 dark:border-gray-800 p-4">
+          <form onSubmit={sendMessage} className="flex items-center space-x-2">
+            <Input
+              placeholder="Message..."
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              className="flex-1"
+            />
+            <Button type="submit" size="icon" disabled={!messageText.trim()}>
+              <Send className="h-4 w-4" />
+            </Button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // Show conversations list
+  return (
+    <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-gray-950">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-4 py-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">Messages</h1>
+          <Button variant="ghost" size="icon">
+            <Plus className="h-5 w-5" />
+          </Button>
+        </div>
+        
+        {/* Search */}
+        <div className="mt-4 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search messages..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {/* Conversations List */}
+      <div className="divide-y divide-gray-100 dark:divide-gray-800">
+        {conversations.length === 0 ? (
+          <div className="text-center py-12">
+            <MessageCircle className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No conversations yet</h3>
+            <p className="text-gray-500 text-sm">Start chatting with friends!</p>
+          </div>
+        ) : (
+          conversations
+            .filter(conv =>
+              getConversationName(conv).toLowerCase().includes(searchQuery.toLowerCase())
+            )
+            .map((conversation) => (
+              <motion.div
+                key={conversation.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="p-4 hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer transition-colors"
+                onClick={() => selectConversation(conversation)}
+              >
+                <div className="flex items-center space-x-3">
+                  <Avatar className="h-12 w-12 ring-2 ring-gray-100 dark:ring-gray-800">
+                    <AvatarImage src={getConversationAvatar(conversation)} />
+                    <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                      {conversation.is_group ? (
+                        <Users className="h-5 w-5" />
+                      ) : (
+                        getConversationName(conversation)[0]?.toUpperCase() || 'U'
+                      )}
+                    </AvatarFallback>
+                  </Avatar>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold truncate">
+                        {getConversationName(conversation)}
+                      </p>
+                      {conversation.last_message_at && (
+                        <span className="text-xs text-gray-500">
+                          {format(new Date(conversation.last_message_at), 'MMM d')}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 truncate">
+                      {conversation.last_message || "No messages yet"}
+                    </p>
+                  </div>
+                  
+                  {conversation.is_group && (
+                    <Badge variant="secondary" className="bg-blue-50 text-blue-600">
+                      Group
+                    </Badge>
+                  )}
+                </div>
+              </motion.div>
+            ))
+        )}
+      </div>
+    </div>
+  );
+}

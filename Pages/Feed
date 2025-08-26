@@ -1,0 +1,216 @@
+import React, { useState, useEffect } from "react";
+import { User } from "@/entities/User";
+import { Post } from "@/entities/Post";
+import { Like } from "@/entities/Like";
+import { Comment } from "@/entities/Comment";
+import { Zap, Users, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { motion, AnimatePresence } from "framer-motion";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+
+import PostCard from "../components/feed/PostCard";
+import ActivityFeed from "../components/feed/ActivityFeed";
+import SuggestedUsers from "../components/feed/SuggestedUsers";
+
+export default function Feed() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [users, setUsers] = useState({});
+  const [likes, setLikes] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState("all");
+
+  useEffect(() => {
+    initializeFeed();
+  }, []);
+
+  const initializeFeed = async () => {
+    try {
+      const user = await User.me();
+      setCurrentUser(user);
+      
+      // Load posts and related data
+      const [allPosts, allUsers, allLikes] = await Promise.all([
+        Post.list('-created_date'),
+        User.list(),
+        Like.list()
+      ]);
+      
+      // Create user lookup
+      const userLookup = {};
+      allUsers.forEach(u => {
+        userLookup[u.id] = u;
+      });
+      
+      // Create likes lookup
+      const likesLookup = {};
+      allLikes.forEach(like => {
+        if (!likesLookup[like.post_id]) likesLookup[like.post_id] = [];
+        likesLookup[like.post_id].push(like);
+      });
+      
+      setPosts(allPosts);
+      setUsers(userLookup);
+      setLikes(likesLookup);
+    } catch (error) {
+      console.error("Error loading feed:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLikePost = async (post) => {
+    if (!currentUser) return;
+    
+    const postLikes = likes[post.id] || [];
+    const userLike = postLikes.find(like => like.user_id === currentUser.id);
+    
+    if (userLike) {
+      // Unlike
+      await Like.delete(userLike.id);
+      await Post.update(post.id, { likes_count: Math.max(0, post.likes_count - 1) });
+    } else {
+      // Like
+      await Like.create({ post_id: post.id, user_id: currentUser.id });
+      await Post.update(post.id, { likes_count: (post.likes_count || 0) + 1 });
+    }
+    
+    // Refresh feed
+    initializeFeed();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
+        <div className="grid lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8 space-y-6">
+            {Array(3).fill(0).map((_, i) => (
+              <Card key={i} className="p-6 animate-pulse">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="h-10 w-10 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-24 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                    <div className="h-3 w-16 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                  </div>
+                </div>
+                <div className="w-full h-64 bg-slate-200 dark:bg-slate-700 rounded-xl mb-4"></div>
+                <div className="space-y-2">
+                  <div className="h-4 w-20 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                  <div className="h-4 w-full bg-slate-200 dark:bg-slate-700 rounded"></div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-slate-900 dark:to-slate-800">
+        <Card className="p-8 max-w-md mx-4">
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+              <Zap className="w-8 h-8 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Welcome to SocialConnect</h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-6">Connect, share, and discover amazing content</p>
+            <Button onClick={() => User.login()} className="bg-gradient-to-r from-indigo-500 to-purple-600">
+              Get Started
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-2 sm:px-4 py-6 sm:py-8">
+      <div className="grid lg:grid-cols-12 gap-8">
+        {/* Main Feed */}
+        <div className="lg:col-span-8">
+          {/* Filter Tabs */}
+          <div className="flex space-x-1 mb-6 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+            {[
+              { key: "all", label: "All Posts", icon: Zap },
+              { key: "trending", label: "Trending", icon: TrendingUp },
+              { key: "following", label: "Following", icon: Users }
+            ].map(({ key, label, icon: Icon }) => (
+              <Button
+                key={key}
+                variant={activeFilter === key ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setActiveFilter(key)}
+                className={`flex-1 ${activeFilter === key 
+                  ? 'bg-white dark:bg-slate-700 shadow-sm' 
+                  : 'hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Icon className="w-4 h-4 mr-2" />
+                {label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Posts */}
+          <div className="space-y-6">
+            <AnimatePresence>
+              {posts.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-center py-16"
+                >
+                  <Card className="p-8">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                      <Zap className="w-8 h-8 text-slate-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-2">Your feed is empty</h3>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                      Start following people or create your first post!
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                      <Link to={createPageUrl("Search")}>
+                        <Button variant="outline">
+                          <Users className="mr-2 h-4 w-4" />
+                          Discover People
+                        </Button>
+                      </Link>
+                      <Link to={createPageUrl("Create")}>
+                        <Button className="bg-gradient-to-r from-indigo-500 to-purple-600">
+                          <Zap className="mr-2 h-4 w-4" />
+                          Create Post
+                        </Button>
+                      </Link>
+                    </div>
+                  </Card>
+                </motion.div>
+              ) : (
+                posts.map((post, index) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    author={users[post.created_by]}
+                    currentUser={currentUser}
+                    isLiked={likes[post.id]?.some(like => like.user_id === currentUser.id)}
+                    onLike={() => handleLikePost(post)}
+                    index={index}
+                  />
+                ))
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div className="lg:col-span-4 hidden lg:block space-y-6">
+          <SuggestedUsers users={Object.values(users)} currentUser={currentUser} />
+          <ActivityFeed />
+        </div>
+      </div>
+    </div>
+  );
+}

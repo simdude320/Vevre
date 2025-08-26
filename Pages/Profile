@@ -1,0 +1,249 @@
+import React, { useState, useEffect } from "react";
+import { User } from "@/entities/User";
+import { Post } from "@/entities/Post";
+import { motion } from "framer-motion";
+import { 
+  Settings, 
+  Grid3X3, 
+  Bookmark, 
+  Tag, 
+  Camera,
+  Edit2,
+  MapPin,
+  Link as LinkIcon,
+  Heart,
+  MessageCircle
+} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+
+export default function Profile() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userPosts, setUserPosts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const user = await User.me();
+      setCurrentUser(user);
+      
+      const posts = await Post.filter({ created_by: user.email }, '-created_date');
+      setUserPosts(posts);
+    } catch (error) {
+      console.error("Error loading profile:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-md mx-auto p-4 animate-pulse">
+        <div className="flex items-center space-x-4 mb-6">
+          <div className="h-20 w-20 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+          <div className="space-y-2">
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+            <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-32"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Please Log In</h2>
+          <Button onClick={() => User.login()}>Sign In</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-gray-950">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-4 py-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">
+            {currentUser.username || currentUser.full_name}
+          </h1>
+          <div className="flex items-center space-x-2">
+            <Link to={createPageUrl("Create")}>
+              <Button variant="ghost" size="icon">
+                <Camera className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Link to={createPageUrl("Settings")}>
+              <Button variant="ghost" size="icon">
+                <Settings className="h-5 w-5" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Profile Info */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="p-4 sm:p-6"
+      >
+        <div className="flex items-start space-x-4 sm:space-x-6">
+          <Avatar className="h-16 w-16 sm:h-20 sm:w-20 ring-4 ring-gray-100 dark:ring-gray-800 flex-shrink-0">
+            <AvatarImage src={currentUser.profile_picture_url} />
+            <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xl">
+              {currentUser.username?.[0]?.toUpperCase() || currentUser.full_name?.[0]?.toUpperCase() || 'U'}
+            </AvatarFallback>
+          </Avatar>
+          
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex space-x-4 sm:space-x-6 text-center">
+                <div>
+                  <div className="font-bold text-base sm:text-lg">{userPosts.length}</div>
+                  <div className="text-[11px] sm:text-xs text-gray-500">posts</div>
+                </div>
+                <div>
+                  <div className="font-bold text-base sm:text-lg">{currentUser.followers_count || 0}</div>
+                  <div className="text-[11px] sm:text-xs text-gray-500">followers</div>
+                </div>
+                <div>
+                  <div className="font-bold text-base sm:text-lg">{currentUser.following_count || 0}</div>
+                  <div className="text-[11px] sm:text-xs text-gray-500">following</div>
+                </div>
+              </div>
+            </div>
+            
+            <Link to={createPageUrl("Settings")}>
+              <Button variant="outline" className="w-full" size="sm">
+                <Edit2 className="mr-2 h-4 w-4" />
+                Edit Profile
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Bio Section */}
+        <div className="mt-4">
+          <h2 className="font-semibold text-gray-900 dark:text-white">
+            {currentUser.full_name}
+          </h2>
+          {currentUser.bio && (
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {currentUser.bio}
+            </p>
+          )}
+          {currentUser.location && (
+            <div className="flex items-center mt-2 text-sm text-gray-500">
+              <MapPin className="h-4 w-4 mr-1" />
+              {currentUser.location}
+            </div>
+          )}
+          {currentUser.website && (
+            <div className="flex items-center mt-1 text-sm text-blue-600">
+              <LinkIcon className="h-4 w-4 mr-1" />
+              <a href={currentUser.website} target="_blank" rel="noopener noreferrer">
+                {currentUser.website}
+              </a>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Posts Tabs */}
+      <Tabs defaultValue="posts" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 bg-transparent border-b border-gray-200 dark:border-gray-800 rounded-none">
+          <TabsTrigger value="posts" className="flex-1">
+            <Grid3X3 className="h-4 w-4" />
+          </TabsTrigger>
+          <TabsTrigger value="saved" className="flex-1">
+            <Bookmark className="h-4 w-4" />
+          </TabsTrigger>
+          <TabsTrigger value="tagged" className="flex-1">
+            <Tag className="h-4 w-4" />
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="posts" className="mt-0">
+          {userPosts.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                <Camera className="h-8 w-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No Posts Yet</h3>
+              <p className="text-gray-500 text-sm mb-4">Start sharing your moments!</p>
+              <Link to={createPageUrl("Create")}>
+                <Button>
+                  <Camera className="mr-2 h-4 w-4" />
+                  Create Your First Post
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-1">
+              {userPosts.map((post, index) => (
+                <motion.div
+                  key={post.id}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="aspect-square bg-gray-100 dark:bg-gray-800 relative group cursor-pointer"
+                >
+                  {post.image_url ? (
+                    <img
+                      src={post.image_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Camera className="h-6 w-6 text-gray-400" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="flex items-center space-x-4 text-white">
+                      <div className="flex items-center">
+                        <Heart className="h-4 w-4 mr-1" />
+                        {post.likes_count || 0}
+                      </div>
+                      <div className="flex items-center">
+                        <MessageCircle className="h-4 w-4 mr-1" />
+                        {post.comments_count || 0}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="saved">
+          <div className="text-center py-12">
+            <Bookmark className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Saved Posts</h3>
+            <p className="text-gray-500 text-sm">Posts you save will appear here</p>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="tagged">
+          <div className="text-center py-12">
+            <Tag className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Tagged Posts</h3>
+            <p className="text-gray-500 text-sm">Posts where you're tagged will appear here</p>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

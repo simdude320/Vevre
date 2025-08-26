@@ -1,0 +1,344 @@
+import React, { useState, useEffect } from "react";
+import { User } from "@/entities/User";
+import { Post } from "@/entities/Post";
+import { motion } from "framer-motion";
+import { Search as SearchIcon, Grid3X3, Hash, Users, TrendingUp } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+export default function Search() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState({
+    users: [],
+    posts: [],
+    hashtags: []
+  });
+  const [trendingHashtags, setTrendingHashtags] = useState([]);
+  const [recentPosts, setRecentPosts] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    initializeSearch();
+  }, []);
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      performSearch();
+    } else {
+      setSearchResults({ users: [], posts: [], hashtags: [] });
+    }
+  }, [searchQuery]);
+
+  const initializeSearch = async () => {
+    try {
+      const user = await User.me();
+      setCurrentUser(user);
+      
+      // Load recent posts for discovery
+      const posts = await Post.list('-created_date', 20);
+      setRecentPosts(posts);
+      
+      // Extract trending hashtags
+      const allHashtags = posts.flatMap(post => post.hashtags || []);
+      const hashtagCounts = {};
+      allHashtags.forEach(tag => {
+        hashtagCounts[tag] = (hashtagCounts[tag] || 0) + 1;
+      });
+      
+      const trending = Object.entries(hashtagCounts)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 10)
+        .map(([tag, count]) => ({ tag, count }));
+        
+      setTrendingHashtags(trending);
+    } catch (error) {
+      console.error("Error initializing search:", error);
+    }
+  };
+
+  const performSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setIsSearching(true);
+    try {
+      const [users, posts] = await Promise.all([
+        User.list(),
+        Post.list()
+      ]);
+      
+      const query = searchQuery.toLowerCase();
+      
+      // Search users
+      const matchingUsers = users.filter(user => 
+        (user.username && user.username.toLowerCase().includes(query)) ||
+        (user.full_name && user.full_name.toLowerCase().includes(query))
+      );
+      
+      // Search posts by caption and hashtags
+      const matchingPosts = posts.filter(post =>
+        (post.caption && post.caption.toLowerCase().includes(query)) ||
+        (post.hashtags && post.hashtags.some(tag => tag.toLowerCase().includes(query)))
+      );
+      
+      // Extract hashtags matching query
+      const allHashtags = posts.flatMap(post => post.hashtags || []);
+      const matchingHashtags = [...new Set(allHashtags)]
+        .filter(tag => tag.toLowerCase().includes(query))
+        .map(tag => {
+          const count = allHashtags.filter(t => t === tag).length;
+          return { tag, count };
+        });
+      
+      setSearchResults({
+        users: matchingUsers,
+        posts: matchingPosts,
+        hashtags: matchingHashtags
+      });
+    } catch (error) {
+      console.error("Search error:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Please Log In</h2>
+          <Button onClick={() => User.login()}>Sign In</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-md mx-auto min-h-screen bg-white dark:bg-gray-950">
+      {/* Header with Search */}
+      <div className="sticky top-0 z-40 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-4 py-4">
+        <div className="relative">
+          <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+          <Input
+            placeholder="Search people, posts, and hashtags..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-11 bg-gray-50 dark:bg-gray-900 border-0"
+          />
+        </div>
+      </div>
+
+      {searchQuery.trim() ? (
+        // Search Results
+        <div className="p-4">
+          <Tabs defaultValue="all" className="w-full">
+            <TabsList className="grid w-full grid-cols-4 bg-gray-100 dark:bg-gray-900">
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="users">Users</TabsTrigger>
+              <TabsTrigger value="posts">Posts</TabsTrigger>
+              <TabsTrigger value="hashtags">Tags</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="all" className="space-y-6">
+              {/* Users */}
+              {searchResults.users.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-3 flex items-center">
+                    <Users className="mr-2 h-4 w-4" />
+                    People
+                  </h3>
+                  <div className="space-y-3">
+                    {searchResults.users.slice(0, 3).map(user => (
+                      <UserSearchResult key={user.id} user={user} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Hashtags */}
+              {searchResults.hashtags.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-3 flex items-center">
+                    <Hash className="mr-2 h-4 w-4" />
+                    Hashtags
+                  </h3>
+                  <div className="space-y-2">
+                    {searchResults.hashtags.slice(0, 3).map(({ tag, count }) => (
+                      <HashtagResult key={tag} tag={tag} count={count} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Posts Grid */}
+              {searchResults.posts.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-3 flex items-center">
+                    <Grid3X3 className="mr-2 h-4 w-4" />
+                    Posts
+                  </h3>
+                  <PostsGrid posts={searchResults.posts} />
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="users">
+              <div className="space-y-3">
+                {searchResults.users.map(user => (
+                  <UserSearchResult key={user.id} user={user} />
+                ))}
+                {searchResults.users.length === 0 && (
+                  <div className="text-center py-8">
+                    <Users className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <p className="text-gray-500">No users found</p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="posts">
+              <PostsGrid posts={searchResults.posts} />
+            </TabsContent>
+
+            <TabsContent value="hashtags">
+              <div className="space-y-2">
+                {searchResults.hashtags.map(({ tag, count }) => (
+                  <HashtagResult key={tag} tag={tag} count={count} />
+                ))}
+                {searchResults.hashtags.length === 0 && (
+                  <div className="text-center py-8">
+                    <Hash className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <p className="text-gray-500">No hashtags found</p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+      ) : (
+        // Discovery Content
+        <div className="p-4 space-y-6">
+          {/* Trending Hashtags */}
+          {trendingHashtags.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold mb-4 flex items-center">
+                <TrendingUp className="mr-2 h-5 w-5" />
+                Trending
+              </h2>
+              <div className="space-y-3">
+                {trendingHashtags.slice(0, 5).map(({ tag, count }) => (
+                  <HashtagResult key={tag} tag={tag} count={count} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Posts Grid */}
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Discover</h2>
+            <PostsGrid posts={recentPosts} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// User Search Result Component
+function UserSearchResult({ user }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+    >
+      <div className="flex items-center space-x-3">
+        <Avatar className="h-12 w-12 ring-2 ring-gray-100 dark:ring-gray-800">
+          <AvatarImage src={user.profile_picture_url} />
+          <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+            {user.username?.[0]?.toUpperCase() || user.full_name?.[0]?.toUpperCase() || 'U'}
+          </AvatarFallback>
+        </Avatar>
+        <div>
+          <p className="font-semibold">{user.username || user.full_name}</p>
+          <p className="text-sm text-gray-500">{user.full_name}</p>
+          {user.followers_count !== undefined && (
+            <p className="text-xs text-gray-400">{user.followers_count} followers</p>
+          )}
+        </div>
+      </div>
+      <Button variant="outline" size="sm">Follow</Button>
+    </motion.div>
+  );
+}
+
+// Hashtag Result Component
+function HashtagResult({ tag, count }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors cursor-pointer"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-semibold">#{tag}</p>
+          <p className="text-sm text-gray-500">{count} posts</p>
+        </div>
+        <Hash className="h-5 w-5 text-gray-400" />
+      </div>
+    </motion.div>
+  );
+}
+
+// Posts Grid Component
+function PostsGrid({ posts }) {
+  if (posts.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Grid3X3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+        <p className="text-gray-500">No posts found</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-1">
+      {posts.map((post, index) => (
+        <motion.div
+          key={post.id}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: index * 0.05 }}
+          className="aspect-square bg-gray-100 dark:bg-gray-800 relative group cursor-pointer"
+        >
+          {post.image_url ? (
+            <img
+              src={post.image_url}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Grid3X3 className="h-6 w-6 text-gray-400" />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="flex items-center space-x-4 text-white text-sm">
+              <div className="flex items-center">
+                ♥ {post.likes_count || 0}
+              </div>
+              <div className="flex items-center">
+                💬 {post.comments_count || 0}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
