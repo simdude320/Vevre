@@ -1,0 +1,27 @@
+{
+  "name": "Comment",
+  "type": "object",
+  "properties": {
+    "post_id": {
+      "type": "string",
+      "description": "ID of the post being commented on"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "ID of the user who commented"
+    },
+    "text": {
+      "type": "string",
+      "description": "Comment text"
+    },
+    "likes_count": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "post_id",
+    "user_id",
+    "text"
+  ]
+}
