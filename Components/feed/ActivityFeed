@@ -1,0 +1,80 @@
+import React from "react";
+import { motion } from "framer-motion";
+import { Activity, Heart, MessageCircle, UserPlus, TrendingUp } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+
+const activities = [
+  {
+    type: "like",
+    user: "Sarah Wilson",
+    action: "liked your post",
+    time: "2 minutes ago",
+    icon: Heart,
+    color: "text-red-500"
+  },
+  {
+    type: "comment",
+    user: "Mike Chen",
+    action: "commented on your post",
+    time: "5 minutes ago",
+    icon: MessageCircle,
+    color: "text-blue-500"
+  },
+  {
+    type: "follow",
+    user: "Alex Johnson",
+    action: "started following you",
+    time: "10 minutes ago",
+    icon: UserPlus,
+    color: "text-green-500"
+  },
+  {
+    type: "trending",
+    user: "Your post",
+    action: "is trending in #photography",
+    time: "1 hour ago",
+    icon: TrendingUp,
+    color: "text-purple-500"
+  }
+];
+
+export default function ActivityFeed() {
+  return (
+    <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-lg">
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center text-lg">
+          <Activity className="w-5 h-5 mr-2 text-indigo-500" />
+          Recent Activity
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {activities.map((activity, index) => (
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.1 }}
+            className="flex items-start space-x-3 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+          >
+            <div className={`p-2 rounded-full bg-slate-100 dark:bg-slate-700 ${activity.color}`}>
+              <activity.icon className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-slate-900 dark:text-white">
+                <span className="font-medium">{activity.user}</span>{' '}
+                {activity.action}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">{activity.time}</p>
+            </div>
+            {activity.type === "trending" && (
+              <Badge className="bg-purple-100 text-purple-600 dark:bg-purple-950/30 dark:text-purple-400">
+                Hot
+              </Badge>
+            )}
+          </motion.div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
