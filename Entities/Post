@@ -1,0 +1,36 @@
+{
+  "name": "Post",
+  "type": "object",
+  "properties": {
+    "image_url": {
+      "type": "string",
+      "description": "URL to the post image"
+    },
+    "caption": {
+      "type": "string",
+      "description": "Post caption"
+    },
+    "hashtags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of hashtags"
+    },
+    "likes_count": {
+      "type": "number",
+      "default": 0
+    },
+    "comments_count": {
+      "type": "number",
+      "default": 0
+    },
+    "location": {
+      "type": "string",
+      "description": "Location where post was created"
+    }
+  },
+  "required": [
+    "image_url"
+  ]
+}
