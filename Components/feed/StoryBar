@@ -1,0 +1,61 @@
+import React from "react";
+import { motion } from "framer-motion";
+import { Plus } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+
+export default function StoryBar({ users, currentUser }) {
+  return (
+    <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-800">
+      <div className="flex space-x-4 overflow-x-auto scrollbar-hide">
+        {/* Add Story Button */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex-shrink-0 text-center"
+        >
+          <div className="relative">
+            <Avatar className="h-16 w-16 ring-2 ring-gray-200 dark:ring-gray-700">
+              <AvatarImage src={currentUser?.profile_picture_url} />
+              <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                {currentUser?.username?.[0]?.toUpperCase() || currentUser?.full_name?.[0]?.toUpperCase() || 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <Button
+              size="icon"
+              className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-blue-600 hover:bg-blue-700 border-2 border-white dark:border-gray-950"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+          </div>
+          <p className="text-xs mt-2 text-gray-600 dark:text-gray-400 max-w-[64px] truncate">
+            Your story
+          </p>
+        </motion.div>
+
+        {/* Other Users' Stories */}
+        {users.slice(0, 8).map((user, index) => (
+          user.id !== currentUser?.id && (
+            <motion.div
+              key={user.id}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: (index + 1) * 0.05 }}
+              className="flex-shrink-0 text-center"
+            >
+              <Avatar className="h-16 w-16 ring-2 ring-gradient-to-r ring-pink-500">
+                <AvatarImage src={user.profile_picture_url} />
+                <AvatarFallback className="bg-gradient-to-r from-pink-500 to-orange-500 text-white">
+                  {user.username?.[0]?.toUpperCase() || user.full_name?.[0]?.toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <p className="text-xs mt-2 text-gray-600 dark:text-gray-400 max-w-[64px] truncate">
+                {user.username || user.full_name}
+              </p>
+            </motion.div>
+          )
+        ))}
+      </div>
+    </div>
+  );
+}
