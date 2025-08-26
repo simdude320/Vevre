@@ -1,0 +1,32 @@
+{
+  "name": "Conversation",
+  "type": "object",
+  "properties": {
+    "participants": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of user IDs in the conversation"
+    },
+    "name": {
+      "type": "string",
+      "description": "Name of group conversation (optional)"
+    },
+    "is_group": {
+      "type": "boolean",
+      "default": false
+    },
+    "last_message": {
+      "type": "string",
+      "description": "Last message in conversation"
+    },
+    "last_message_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "participants"
+  ]
+}
